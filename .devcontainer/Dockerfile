@@ -21,7 +21,7 @@ RUN conda install -c conda-forge opencv
 #RUN pip3 install opencv-python
 #RUN pip3 install opencv-contlib-python
 RUN pip3 install scikit-image
-
+RUN pip3 install fsutils
 
 # [Optional] Set the default user. Omit if you want to keep the default as root.
 USER $USERNAME
