@@ -5,3 +5,6 @@ saved/model_weight/
 
 /etl_data/*/
 etlcdb-image-extractor
+
+.vscode
+.devcontainer
