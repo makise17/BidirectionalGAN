@@ -1,10 +1,11 @@
 data/
 __pycache__
+
+.vscode/*
+.devcontainer/*
+
 saved/generated_images/*.png
 saved/model_weight/
 
 /etl_data/*/
 etlcdb-image-extractor
-
-.vscode
-.devcontainer
