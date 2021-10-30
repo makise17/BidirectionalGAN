@@ -26,6 +26,9 @@ def parse_args():
     parser.add_argument('--image_save_path', type=str, default='saved/generated_images', help='generated image save path')
     parser.add_argument('--model_save_path', type=str, default='saved/model_weight', help='model save path')
 
+    # Conditional
+    parser.add_argument('--n_classes', type=int, default='10', help='')
+
     config = parser.parse_args()
     config.device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
