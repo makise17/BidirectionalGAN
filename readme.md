@@ -26,6 +26,15 @@ python main.py
 ```
 
 ### Results
-**Epoch 1**  
-![Image1]()    
- 
+**BiGAN Epoch 3**  
+![real](/figures/Bi/E3_Iteration400_real.png)
+![fake](/figures/Bi/E3_Iteration400_fake.png)    
+**BiGAN Epoch 195**  
+![real](/figures/Bi/E195_Iteration400_real.png)
+![fake](/figures/Bi/E195_Iteration400_fake.png)  
+**BiCoGAN Epoch 3**  
+![real](/figures/BiCo/E3_Iteration400_real.png)
+![fake](/figures/BiCo/E3_Iteration400_fake.png)    
+**BiCoGAN Epoch 195**  
+![real](/figures/BiCo/E195_Iteration400_real.png)
+![fake](/figures/BiCo/E195_Iteration400_fake.png)  
