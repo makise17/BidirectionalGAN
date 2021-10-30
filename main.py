@@ -3,7 +3,8 @@ import argparse
 import torch
 import torchvision
 import torchvision.transforms as transforms
-from model import BiGAN
+# from model import BiGAN
+from model import BiCoGAN
 
 
 def parse_args():
@@ -30,6 +31,9 @@ def parse_args():
     config.device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
 
+    # Conditional
+    config.n_classes = 10
+
     return config
 
 
@@ -45,7 +49,9 @@ def main():
     test_loader = torch.utils.data.DataLoader(dataset=test_dataset,batch_size=config.batch_size,shuffle=False)
 
     # Model
-    model = BiGAN(config)
+    # model = BiGAN(config)
+    model = BiCoGAN(config)
+    
     model.train(train_loader)
 
 if __name__ == '__main__':
