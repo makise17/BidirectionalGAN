@@ -6,6 +6,7 @@ __pycache__
 
 saved/generated_images/*.png
 saved/model_weight/
+saved/results/
 
 /etl_data/*/
 etlcdb-image-extractor
