@@ -32,9 +32,15 @@ python main.py
 **BiGAN Epoch 195**  
 ![real](/figures/Bi/E195_Iteration400_real.png)
 ![fake](/figures/Bi/E195_Iteration400_fake.png)  
+**BiGAN Epoch 317**  
+![real](/figures/Bi/E317_Iteration400_real.png)
+![fake](/figures/Bi/E317_Iteration400_fake.png)  
 **BiCoGAN Epoch 3**  
 ![real](/figures/BiCo/E3_Iteration400_real.png)
 ![fake](/figures/BiCo/E3_Iteration400_fake.png)    
 **BiCoGAN Epoch 195**  
 ![real](/figures/BiCo/E195_Iteration400_real.png)
 ![fake](/figures/BiCo/E195_Iteration400_fake.png)  
+**BiCoGAN Epoch 317**  
+![real](/figures/BiCo/E317_Iteration400_real.png)
+![fake](/figures/BiCo/E317_Iteration400_fake.png)  
