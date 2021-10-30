@@ -29,13 +29,15 @@ class BiCoGAN(nn.Module):
         self._model_save_path = config.model_save_path
         self._device = config.device
 
-        self._n_classes = config.classes
+        # conditional
+        self._n_classes = config.n_classes
 
         if self._work_type == 'train':
             # Loss function
             self._adversarial_criterion = torch.nn.MSELoss()
 
             # Initialize generator, encoder and discriminator
+            # add n_classes
             self._G = Generator(self._latent_dim,self._img_shape,self._n_classes).to(self._device)
             self._E = Encoder(self._latent_dim,self._img_shape,self._n_classes).to(self._device)
             self._D = Discriminator(self._latent_dim,self._img_shape,self._n_classes).to(self._device)
@@ -58,7 +60,8 @@ class BiCoGAN(nn.Module):
             self._G_scheduler.step()
             self._D_scheduler.step()
 
-            for i, (images, _) in enumerate(train_loader):
+            # unpack images, labels
+            for i, (images, labels) in enumerate(train_loader):
                 # Adversarial ground truths
                 valid = Variable(Tensor(images.size(0), 1).fill_(1), requires_grad=False)
                 fake = Variable(Tensor(images.size(0), 1).fill_(0), requires_grad=False)
@@ -72,8 +75,9 @@ class BiCoGAN(nn.Module):
                 images = images.reshape(-1,np.prod(self._img_shape)).to(self._device)
 
                 # z_ is encoded latent vector
-                (original_img,z_)= self._E(images)
-                predict_encoder = self._D(original_img,z_)
+                # labels is character label
+                (original_img, z_, labels_ )= self._E(images, labels)
+                predict_encoder = self._D(original_img, z_, labels_ )
   
 
                 # ---------------------
@@ -82,8 +86,10 @@ class BiCoGAN(nn.Module):
                 
                 # Sample noise as generator input
                 z = Variable(Tensor(np.random.normal(0, 1, (images.shape[0],self._latent_dim))))
-                (gen_img,z)=self._G(z)
-                predict_generator = self._D(gen_img,z)
+                
+                # labels
+                (gen_img, z, labels)=self._G(z, labels)
+                predict_generator = self._D(gen_img,z, labels)
                                                                                                                
                 G_loss = (self._adversarial_criterion(predict_generator,valid)+self._adversarial_criterion(predict_encoder,fake)) *0.5   
 
@@ -96,10 +102,10 @@ class BiCoGAN(nn.Module):
                 # ---------------------
 
                 z = Variable(Tensor(np.random.normal(0, 1, (images.shape[0],self._latent_dim))))
-                (gen_img,z)=self._G(z)
-                (original_img,z_)= self._E(images)
-                predict_encoder = self._D(original_img,z_)
-                predict_generator = self._D(gen_img,z)
+                (gen_img,z, labels)=self._G(z, labels)
+                (original_img,z_,labels_)= self._E(images,labels)
+                predict_encoder = self._D(original_img,z_, labels_)
+                predict_generator = self._D(gen_img, z, labels)
 
                 D_loss = (self._adversarial_criterion(predict_encoder,valid)+self._adversarial_criterion(predict_generator,fake)) *0.5                
                 

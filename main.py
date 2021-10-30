@@ -3,7 +3,8 @@ import argparse
 import torch
 import torchvision
 import torchvision.transforms as transforms
-from model import BiGAN
+# from model import BiGAN
+from model import BiCoGAN
 
 
 def parse_args():
@@ -26,12 +27,12 @@ def parse_args():
     parser.add_argument('--image_save_path', type=str, default='saved/generated_images', help='generated image save path')
     parser.add_argument('--model_save_path', type=str, default='saved/model_weight', help='model save path')
 
-    # Conditional
-    parser.add_argument('--n_classes', type=int, default='10', help='')
-
     config = parser.parse_args()
     config.device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
+
+    # Conditional
+    config.n_classes = 10
 
     return config
 
@@ -48,7 +49,9 @@ def main():
     test_loader = torch.utils.data.DataLoader(dataset=test_dataset,batch_size=config.batch_size,shuffle=False)
 
     # Model
-    model = BiGAN(config)
+    # model = BiGAN(config)
+    model = BiCoGAN(config)
+    
     model.train(train_loader)
 
 if __name__ == '__main__':
