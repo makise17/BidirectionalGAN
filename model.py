@@ -73,7 +73,7 @@ class BiCoGAN(nn.Module):
                 
                 # Configure input
                 images = images.reshape(-1,np.prod(self._img_shape)).to(self._device)
-
+                labels = labels.to(self._device)
                 # z_ is encoded latent vector
                 # labels is character label
                 (original_img, z_, labels_ )= self._E(images, labels)
