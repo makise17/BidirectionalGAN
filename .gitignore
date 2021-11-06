@@ -5,7 +5,7 @@ __pycache__
 .devcontainer/*
 
 saved/generated_images/*.png
-saved/model_weight/*
+saved/model_weight/*.pth
 saved/results/
 
 /etl_data/*/
