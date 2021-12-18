@@ -10,6 +10,8 @@ from torch.optim import lr_scheduler
 
 from modules import Generator,Encoder,Discriminator
 
+import itertools
+
 class BiCoGAN(nn.Module):
     def __init__(self,config):
         super(BiCoGAN,self).__init__()
@@ -18,8 +20,8 @@ class BiCoGAN(nn.Module):
         self._epochs = config.epochs
         self._batch_size = config.batch_size
 
-        self._encoder_lr = config.encoder_lr
-        self._generator_lr = config.generator_lr
+        #self._encoder_lr = config.encoder_lr
+        self._gen_enc_lr = config.gen_enc_lr
         self._discriminator_lr = config.discriminator_lr
         self._latent_dim = config.latent_dim
         self._weight_decay = config.weight_decay
@@ -38,16 +40,16 @@ class BiCoGAN(nn.Module):
 
             # Initialize generator, encoder and discriminator
             # add n_classes
-            self._G = Generator(self._latent_dim,self._img_shape,self._n_classes).to(self._device)
-            self._E = Encoder(self._latent_dim,self._img_shape,self._n_classes).to(self._device)
-            self._D = Discriminator(self._latent_dim,self._img_shape,self._n_classes).to(self._device)
+            self._G = Generator(self._latent_dim,self._n_classes,self._img_shape).to(self._device)
+            self._E = Encoder(self._latent_dim,self._n_classes,self._img_shape).to(self._device)
+            self._D = Discriminator(self._latent_dim,self._n_classes,self._img_shape).to(self._device)
 
             self._G.apply(self.weights_init)
             self._E.apply(self.weights_init)
             self._D.apply(self.discriminator_weights_init)
 
             self._G_optimizer = torch.optim.Adam([{'params' : self._G.parameters()},{'params' : self._E.parameters()}],
-                                                lr=self._generator_lr,betas=(0.5,0.999),weight_decay=self._weight_decay)
+                                                lr=self._gen_enc_lr,betas=(0.5,0.999),weight_decay=self._weight_decay)
             self._D_optimizer = torch.optim.Adam(self._D.parameters(),lr=self._discriminator_lr,betas=(0.5,0.999))
             
             self._G_scheduler = lr_scheduler.ExponentialLR(self._G_optimizer, gamma= 0.99) 
@@ -56,6 +58,15 @@ class BiCoGAN(nn.Module):
     def train(self,train_loader):
         Tensor = torch.cuda.FloatTensor if self._device == 'cuda' else torch.FloatTensor
         n_total_steps = len(train_loader)
+        if self._device == 'cuda':
+            onehot_before_cod = torch.LongTensor([i for i in range(10)]).cuda() #0123456789
+        else:
+            onehot_before_cod = torch.LongTensor([i for i in range(10)])
+        onehot = nn.functional.one_hot(onehot_before_cod, num_classes=10)
+        
+        onehot = onehot.reshape(10,10,1,1).float()
+        fill = onehot.repeat(1,1,28,28)
+
         for epoch in range(self._epochs):
             self._G_scheduler.step()
             self._D_scheduler.step()
@@ -72,12 +83,14 @@ class BiCoGAN(nn.Module):
                 # ---------------------
                 
                 # Configure input
-                images = images.reshape(-1,np.prod(self._img_shape)).to(self._device)
+                images = images.to(self._device)
                 labels = labels.to(self._device)
+                onehot = nn.functional.one_hot(labels, num_classes=10).to(torch.float32)
+                c_real = fill[labels].to(self._device)
                 # z_ is encoded latent vector
                 # labels is character label
-                (original_img, z_, labels_ )= self._E(images, labels)
-                predict_encoder = self._D(original_img, z_, labels_ )
+                (original_img, z_, labels_ )= self._E(images, c_real)
+                predict_encoder = self._D(original_img, z_, labels )
   
 
                 # ---------------------
@@ -88,7 +101,7 @@ class BiCoGAN(nn.Module):
                 z = Variable(Tensor(np.random.normal(0, 1, (images.shape[0],self._latent_dim))))
                 
                 # labels
-                (gen_img, z, labels)=self._G(z, labels)
+                (gen_img, z, _)=self._G(z, onehot)
                 predict_generator = self._D(gen_img,z, labels)
                                                                                                                
                 G_loss = (self._adversarial_criterion(predict_generator,valid)+self._adversarial_criterion(predict_encoder,fake)) *0.5   
@@ -100,11 +113,12 @@ class BiCoGAN(nn.Module):
                 # ---------------------
                 # Train Discriminator
                 # ---------------------
-
                 z = Variable(Tensor(np.random.normal(0, 1, (images.shape[0],self._latent_dim))))
-                (gen_img,z, labels)=self._G(z, labels)
-                (original_img,z_,labels_)= self._E(images,labels)
-                predict_encoder = self._D(original_img,z_, labels_)
+                (gen_img,z, _)=self._G(z, onehot)
+                (original_img,z_,labels_)= self._E(images, c_real)
+                original_img = original_img.reshape(-1,np.prod(self._img_shape)).to(self._device)
+                predict_encoder = self._D(original_img,z_, labels)
+                #gen_img = gen_img.reshape(-1,np.prod(self._img_shape)).to(self._device)
                 predict_generator = self._D(gen_img, z, labels)
 
                 D_loss = (self._adversarial_criterion(predict_encoder,valid)+self._adversarial_criterion(predict_generator,fake)) *0.5                
@@ -112,17 +126,14 @@ class BiCoGAN(nn.Module):
                 self._D_optimizer.zero_grad()
                 D_loss.backward()
                 self._D_optimizer.step()
-
-                
-
                 
                 if i % 100 == 0:
                     print (f'Epoch [{epoch+1}/{self._epochs}], Step [{i+1}/{n_total_steps}]')
                     print (f'Generator Loss: {G_loss.item():.4f} Discriminator Loss: {D_loss.item():.4f}')
  
                 if i % 400 ==0:
-                    vutils.save_image(gen_img.unsqueeze(1).cpu().data[:64, ], f'{self._img_save_path}/E{epoch}_Iteration{i}_fake.png')
-                    vutils.save_image(original_img.unsqueeze(1).cpu().data[:64, ], f'{self._img_save_path}/E{epoch}_Iteration{i}_real.png')
+                    vutils.save_image(gen_img.cpu().data[:64, ], f'{self._img_save_path}/E{epoch}_Iteration{i}_fake.png')
+                    vutils.save_image(images.cpu().data[:64, ], f'{self._img_save_path}/E{epoch}_Iteration{i}_real.png')
                     print('image saved')
                     print('')
             if epoch % 100==0:
@@ -158,8 +169,7 @@ class BiGAN(nn.Module):
         self._epochs = config.epochs
         self._batch_size = config.batch_size
 
-        self._encoder_lr = config.encoder_lr
-        self._generator_lr = config.generator_lr
+        self._gen_enc_lr = config.gen_enc_lr
         self._discriminator_lr = config.discriminator_lr
         self._latent_dim = config.latent_dim
         self._weight_decay = config.weight_decay
@@ -182,9 +192,12 @@ class BiGAN(nn.Module):
             self._E.apply(self.weights_init)
             self._D.apply(self.discriminator_weights_init)
 
-            self._G_optimizer = torch.optim.Adam([{'params' : self._G.parameters()},{'params' : self._E.parameters()}],
-                                                lr=self._generator_lr,betas=(0.5,0.999),weight_decay=self._weight_decay)
-            self._D_optimizer = torch.optim.Adam(self._D.parameters(),lr=self._discriminator_lr,betas=(0.5,0.999))
+            #2021/12/10
+            self._G_optimizer = torch.optim.Adam(filter(lambda p: p.requires_grad, itertools.chain(self._G.parameters(), self._E.parameters())),
+                                                lr=self._gen_enc_lr,betas=(0.5,0.999),weight_decay=self._weight_decay)
+            # self._G_optimizer = torch.optim.Adam([{'params' : self._G.parameters()},{'params' : self._E.parameters()}],
+            #                                     lr=self._generator_lr,betas=(0.5,0.999),weight_decay=self._weight_decay)
+            self._D_optimizer = torch.optim.Adam(filter(lambda p: p.requires_grad, self._D.parameters()),lr=self._discriminator_lr,betas=(0.5,0.999))
             
             self._G_scheduler = lr_scheduler.ExponentialLR(self._G_optimizer, gamma= 0.99) 
             self._D_scheduler = lr_scheduler.ExponentialLR(self._D_optimizer, gamma= 0.99) 
