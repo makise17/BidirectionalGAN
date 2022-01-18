@@ -54,10 +54,10 @@ class BiCoGAN(nn.Module):
             #                                     lr=self._gen_enc_lr,momentum=0.8,weight_decay=self._weight_decay)
             # self._D_optimizer = torch.optim.SGD(self._D.parameters(),lr=self._discriminator_lr,momentum=0.8)
 
-            self._G_optimizer = torch.optim.Adam(list(self._G.parameters())+list(self._E.parameters()),
-                                                lr=self._gen_enc_lr,betas=(0.5,0.999))
             # self._G_optimizer = torch.optim.Adam(list(self._G.parameters())+list(self._E.parameters()),
-            #                                     lr=self._gen_enc_lr,betas=(0.5,0.999),weight_decay=self._weight_decay)
+            #                                     lr=self._gen_enc_lr,betas=(0.5,0.999))
+            self._G_optimizer = torch.optim.Adam(list(self._G.parameters())+list(self._E.parameters()),
+                                                lr=self._gen_enc_lr,betas=(0.5,0.999),weight_decay=self._weight_decay)
             self._D_optimizer = torch.optim.Adam(self._D.parameters(),lr=self._discriminator_lr,betas=(0.5,0.999))
             
             self._G_scheduler = lr_scheduler.ExponentialLR(self._G_optimizer, gamma= 0.99) 
@@ -72,7 +72,7 @@ class BiCoGAN(nn.Module):
         return -torch.mean(loss)
         
     def train(self,train_loader):
-        Tensor = torch.cuda.FloatTensor if self._device == 'cuda' else torch.FloatTensor
+        #Tensor = torch.cuda.FloatTensor if self._device == 'cuda' else torch.FloatTensor
         n_total_steps = len(train_loader)
         if self._device == 'cuda':
             onehot_before_cod = torch.LongTensor([i for i in range(10)]).cuda() #0123456789
@@ -99,10 +99,6 @@ class BiCoGAN(nn.Module):
                 #fake = Variable(Tensor(images.size(0), 1).fill_(0), requires_grad=False)
 
                 
-                # ---------------------
-                # Train Encoder
-                # ---------------------
-                
                 # Configure input
                 images = images.to(self._device)
                 labels = labels.to(self._device)
@@ -125,10 +121,13 @@ class BiCoGAN(nn.Module):
                 self._D_optimizer.zero_grad()
                 self._G_optimizer.zero_grad()
 
-                loss_D.backward(retain_graph=True)
+                loss_D.backward()
                 self._D_optimizer.step()
-                self._D_scheduler.step() 
+                #self._D_scheduler.step() 
 
+                # ---------------------
+                # Train Encoder
+                # ---------------------
                 # ---------------------
                 # Train Generator
                 # ---------------------    
@@ -149,7 +148,7 @@ class BiCoGAN(nn.Module):
                 self._D_optimizer.zero_grad()
                 loss_EG.backward()
                 self._G_optimizer.step()         
-                self._G_scheduler.step()
+                #self._G_scheduler.step()
                 
                 if i %100 == 0:
                     print (f'Epoch [{epoch+1}/{self._epochs}], Step [{i+1}/{n_total_steps}]')
@@ -171,32 +170,32 @@ class BiCoGAN(nn.Module):
                 self._G.eval()
 
                 with torch.no_grad():
-                        #generate images from same class as real ones
-                        real = images[:n_show]
-                        c = torch.zeros(n_show, 10, dtype=torch.float32).to(self._device)
-                        c[torch.arange(n_show), labels[:n_show]] = 1#onehot
-                        c_real = fill[labels[:n_show]].to(self._device)
-                        gener = self._G(fixed_z, c).reshape(n_show, 28, 28).cpu().numpy()
-                        recon = self._G(self._E(real, c_real), c).reshape(n_show, 28, 28).cpu().numpy()#.reshape(n_show, 28, 28).cpu().numpy()
-                        real = real.reshape(n_show, 28, 28).cpu().numpy()
+                    #generate images from same class as real ones
+                    real = images[:n_show]
+                    c = torch.zeros(n_show, 10, dtype=torch.float32).to(self._device)
+                    c[torch.arange(n_show), labels[:n_show]] = 1#onehot
+                    c_real = fill[labels[:n_show]].to(self._device)
+                    gener = self._G(fixed_z, c).reshape(n_show, 28, 28).cpu().numpy()
+                    recon = self._G(self._E(real, c_real), c).reshape(n_show, 28, 28).cpu().numpy()#.reshape(n_show, 28, 28).cpu().numpy()
+                    real = real.reshape(n_show, 28, 28).cpu().numpy()
 
-                        fig, ax = plt.subplots(3, n_show, figsize=(15,5))
-                        fig.subplots_adjust(wspace=0.05, hspace=0)
-                        plt.rcParams.update({'font.size': 20})
-                        fig.suptitle('Epoch {}'.format(epoch+1))
-                        fig.text(0.04, 0.75, 'G(z, c)', ha='left')
-                        fig.text(0.04, 0.5, 'x', ha='left')
-                        fig.text(0.04, 0.25, 'G(E(x), c)', ha='left')
+                    fig, ax = plt.subplots(3, n_show, figsize=(15,5))
+                    fig.subplots_adjust(wspace=0.05, hspace=0)
+                    plt.rcParams.update({'font.size': 20})
+                    fig.suptitle('Epoch {}'.format(epoch+1))
+                    fig.text(0.04, 0.75, 'G(z, c)', ha='left')
+                    fig.text(0.04, 0.5, 'x', ha='left')
+                    fig.text(0.04, 0.25, 'G(E(x), c)', ha='left')
 
-                        for i in range(n_show):
-                            ax[0, i].imshow(gener[i], cmap='gray')
-                            ax[0, i].axis('off')
-                            ax[1, i].imshow(real[i], cmap='gray')
-                            ax[1, i].axis('off')
-                            ax[2, i].imshow(recon[i], cmap='gray')
-                            ax[2, i].axis('off')
-                        plt.savefig(f'{self._img_save_path}/E{epoch}_summary.png')
-                        #plt.show()
+                    for i in range(n_show):
+                        ax[0, i].imshow(gener[i], cmap='gray')
+                        ax[0, i].axis('off')
+                        ax[1, i].imshow(real[i], cmap='gray')
+                        ax[1, i].axis('off')
+                        ax[2, i].imshow(recon[i], cmap='gray')
+                        ax[2, i].axis('off')
+                    plt.savefig(f'{self._img_save_path}/E{epoch}_summary.png')
+                    #plt.show()
 
 
 
@@ -213,7 +212,8 @@ class BiCoGAN(nn.Module):
                 nn.init.constant_(m.bias.data, 0)
         elif classname.find('BatchNorm') != -1:
             nn.init.normal_(m.weight.data, 1.0, 0.02)
-            nn.init.constant_(m.bias.data, 0)
+            if m.bias is not None:
+                nn.init.constant_(m.bias.data, 0)
         # if classname.find('BatchNorm') != -1:
         #     m.weight.data.normal_(1.0, 0.02)
         #     m.bias.data.fill_(0)
