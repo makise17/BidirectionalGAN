@@ -84,7 +84,8 @@ class BiCoGAN(nn.Module):
         fill = onehot.repeat(1,1,28,28)
         
         n_show = 10
-        fixed_z= 2 * torch.rand(n_show, self._latent_dim) - 1
+        fixed_z = torch.randn(n_show, self._latent_dim)
+        #fixed_z = 2 * torch.rand(n_show, self._latent_dim) - 1
         fixed_z = fixed_z.to(self._device)
 
         for epoch in range(self._epochs):
@@ -109,7 +110,8 @@ class BiCoGAN(nn.Module):
                 # ---------------------
                 # Train Discriminator
                 # ---------------------
-                z = 2 * torch.rand(images.size(0), self._latent_dim) - 1
+                z = torch.randn(images.size(0), self._latent_dim)
+                #z = 2 * torch.rand(images.size(0), self._latent_dim) - 1
                 z = z.to(self._device)
                 Gz =self._G(z, onehot)
                 Ex = self._E(images, c_real)
@@ -137,7 +139,8 @@ class BiCoGAN(nn.Module):
                 # labels is character label
                 Ex = self._E(images, c_real)
                 predict_encoder = self._D(images, Ex, labels )
-                z = 2 * torch.rand(images.size(0), self._latent_dim) - 1
+                z = torch.randn(images.size(0), self._latent_dim)
+                #z = 2 * torch.rand(images.size(0), self._latent_dim) - 1
                 z = z.to(self._device)
                 # labels
                 Gz = self._G(z, onehot)

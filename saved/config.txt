@@ -9,5 +9,5 @@
  'latent_dim': 100,
  'model_save_path': 'saved/model_weight',
  'n_classes': 10,
- 'weight_decay': 1e-05,
+ 'weight_decay': 2.5e-05,
  'work_type': 'train'}

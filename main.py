@@ -20,7 +20,7 @@ def parse_args():
     parser.add_argument('--gen_enc_lr', type=float, default=1e-4, help='learning rate for generator')
     parser.add_argument('--discriminator_lr', type=float, default=1e-4, help='learning rate for discriminator')
     parser.add_argument('--latent_dim', type=int, default=100, help='Latent dimension of z')
-    parser.add_argument('--weight_decay', type=float, default=1e-5, help='Weight decay')
+    parser.add_argument('--weight_decay', type=float, default=2.5*1e-5, help='Weight decay')
     # Data
     parser.add_argument('--input_size', type=int, default=28, help='image size')
     parser.add_argument('--image_save_path', type=str, default='saved/generated_images', help='generated image save path')
