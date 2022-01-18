@@ -11,6 +11,7 @@ from torch.optim import lr_scheduler
 from modules import Generator,Encoder,Discriminator
 
 import itertools
+import matplotlib.pyplot as plt
 
 class BiCoGAN(nn.Module):
     def __init__(self,config):
@@ -46,15 +47,30 @@ class BiCoGAN(nn.Module):
 
             self._G.apply(self.weights_init)
             self._E.apply(self.weights_init)
-            self._D.apply(self.discriminator_weights_init)
+            self._D.apply(self.weights_init)
+            #self._D.apply(self.discriminator_weights_init)
 
-            self._G_optimizer = torch.optim.Adam([{'params' : self._G.parameters()},{'params' : self._E.parameters()}],
-                                                lr=self._gen_enc_lr,betas=(0.5,0.999),weight_decay=self._weight_decay)
+            # self._G_optimizer = torch.optim.SGD([{'params' : self._G.parameters()},{'params' : self._E.parameters()}],
+            #                                     lr=self._gen_enc_lr,momentum=0.8,weight_decay=self._weight_decay)
+            # self._D_optimizer = torch.optim.SGD(self._D.parameters(),lr=self._discriminator_lr,momentum=0.8)
+
+            self._G_optimizer = torch.optim.Adam(list(self._G.parameters())+list(self._E.parameters()),
+                                                lr=self._gen_enc_lr,betas=(0.5,0.999))
+            # self._G_optimizer = torch.optim.Adam(list(self._G.parameters())+list(self._E.parameters()),
+            #                                     lr=self._gen_enc_lr,betas=(0.5,0.999),weight_decay=self._weight_decay)
             self._D_optimizer = torch.optim.Adam(self._D.parameters(),lr=self._discriminator_lr,betas=(0.5,0.999))
             
             self._G_scheduler = lr_scheduler.ExponentialLR(self._G_optimizer, gamma= 0.99) 
             self._D_scheduler = lr_scheduler.ExponentialLR(self._D_optimizer, gamma= 0.99) 
 
+    def EG_loss(self,DG, DE, eps=1e-6):
+        loss = torch.log(DG + eps) + torch.log(1 - DE + eps)
+        return -torch.mean(loss)
+
+    def D_loss(self,DG, DE, eps=1e-6):
+        loss = torch.log(DE + eps) + torch.log(1 - DG + eps)
+        return -torch.mean(loss)
+        
     def train(self,train_loader):
         Tensor = torch.cuda.FloatTensor if self._device == 'cuda' else torch.FloatTensor
         n_total_steps = len(train_loader)
@@ -66,16 +82,21 @@ class BiCoGAN(nn.Module):
         
         onehot = onehot.reshape(10,10,1,1).float()
         fill = onehot.repeat(1,1,28,28)
+        
+        n_show = 10
+        fixed_z= 2 * torch.rand(n_show, self._latent_dim) - 1
+        fixed_z = fixed_z.to(self._device)
 
         for epoch in range(self._epochs):
-            self._G_scheduler.step()
-            self._D_scheduler.step()
+            self._D.train()
+            self._E.train()
+            self._G.train()
 
             # unpack images, labels
             for i, (images, labels) in enumerate(train_loader):
                 # Adversarial ground truths
-                valid = Variable(Tensor(images.size(0), 1).fill_(1), requires_grad=False)
-                fake = Variable(Tensor(images.size(0), 1).fill_(0), requires_grad=False)
+                #valid = Variable(Tensor(images.size(0), 1).fill_(1), requires_grad=False)
+                #fake = Variable(Tensor(images.size(0), 1).fill_(0), requires_grad=False)
 
                 
                 # ---------------------
@@ -86,53 +107,56 @@ class BiCoGAN(nn.Module):
                 images = images.to(self._device)
                 labels = labels.to(self._device)
                 onehot = nn.functional.one_hot(labels, num_classes=10).to(torch.float32)
+                #one-hot
                 c_real = fill[labels].to(self._device)
-                # z_ is encoded latent vector
-                # labels is character label
-                (original_img, z_, labels_ )= self._E(images, c_real)
-                predict_encoder = self._D(original_img, z_, labels )
-  
-
-                # ---------------------
-                # Train Generator
-                # ---------------------
-                
-                # Sample noise as generator input
-                z = Variable(Tensor(np.random.normal(0, 1, (images.shape[0],self._latent_dim))))
-                
-                # labels
-                (gen_img, z, _)=self._G(z, onehot)
-                predict_generator = self._D(gen_img,z, labels)
-                                                                                                               
-                G_loss = (self._adversarial_criterion(predict_generator,valid)+self._adversarial_criterion(predict_encoder,fake)) *0.5   
-
-                self._G_optimizer.zero_grad()
-                G_loss.backward()
-                self._G_optimizer.step()         
 
                 # ---------------------
                 # Train Discriminator
                 # ---------------------
-                z = Variable(Tensor(np.random.normal(0, 1, (images.shape[0],self._latent_dim))))
-                (gen_img,z, _)=self._G(z, onehot)
-                (original_img,z_,labels_)= self._E(images, c_real)
-                original_img = original_img.reshape(-1,np.prod(self._img_shape)).to(self._device)
-                predict_encoder = self._D(original_img,z_, labels)
+                z = 2 * torch.rand(images.size(0), self._latent_dim) - 1
+                z = z.to(self._device)
+                Gz =self._G(z, onehot)
+                Ex = self._E(images, c_real)
+                predict_encoder = self._D(images, Ex, labels)
                 #gen_img = gen_img.reshape(-1,np.prod(self._img_shape)).to(self._device)
-                predict_generator = self._D(gen_img, z, labels)
-
-                D_loss = (self._adversarial_criterion(predict_encoder,valid)+self._adversarial_criterion(predict_generator,fake)) *0.5                
+                predict_generator = self._D(Gz, z, labels)
                 
+                loss_D = self.D_loss(predict_generator, predict_encoder)                 
                 self._D_optimizer.zero_grad()
-                D_loss.backward()
+                self._G_optimizer.zero_grad()
+
+                loss_D.backward(retain_graph=True)
                 self._D_optimizer.step()
+                self._D_scheduler.step() 
+
+                # ---------------------
+                # Train Generator
+                # ---------------------    
+                # Sample noise as generator input
+                #z = Variable(Tensor(np.random.normal(0, 1, (images.shape[0],self._latent_dim))))
+                # z_ is encoded latent vector
+                # labels is character label
+                Ex = self._E(images, c_real)
+                predict_encoder = self._D(images, Ex, labels )
+                z = 2 * torch.rand(images.size(0), self._latent_dim) - 1
+                z = z.to(self._device)
+                # labels
+                Gz = self._G(z, onehot)
+                predict_generator = self._D(Gz, z, labels)
+
+                loss_EG = self.EG_loss(predict_generator, predict_encoder)
+                self._G_optimizer.zero_grad()
+                self._D_optimizer.zero_grad()
+                loss_EG.backward()
+                self._G_optimizer.step()         
+                self._G_scheduler.step()
                 
-                if i % 100 == 0:
+                if i %100 == 0:
                     print (f'Epoch [{epoch+1}/{self._epochs}], Step [{i+1}/{n_total_steps}]')
-                    print (f'Generator Loss: {G_loss.item():.4f} Discriminator Loss: {D_loss.item():.4f}')
+                    print (f'Generator Loss: {loss_EG.item():.4f} Discriminator Loss: {loss_D.item():.4f}')
  
                 if i % 400 ==0:
-                    vutils.save_image(gen_img.cpu().data[:64, ], f'{self._img_save_path}/E{epoch}_Iteration{i}_fake.png')
+                    vutils.save_image(Gz.cpu().data[:64, ], f'{self._img_save_path}/E{epoch}_Iteration{i}_fake.png')
                     vutils.save_image(images.cpu().data[:64, ], f'{self._img_save_path}/E{epoch}_Iteration{i}_real.png')
                     print('image saved')
                     print('')
@@ -140,18 +164,61 @@ class BiCoGAN(nn.Module):
                 torch.save(self._G.state_dict(), f'{self._model_save_path}/netG_{epoch}epoch.pth')
                 torch.save(self._E.state_dict(), f'{self._model_save_path}/netE_{epoch}epoch.pth')
                 torch.save(self._D.state_dict(), f'{self._model_save_path}/netD_{epoch}epoch.pth')
+            if (epoch + 1) % 1 == 0:
+                n_show = 10
+                self._D.eval()
+                self._E.eval()
+                self._G.eval()
 
+                with torch.no_grad():
+                        #generate images from same class as real ones
+                        real = images[:n_show]
+                        c = torch.zeros(n_show, 10, dtype=torch.float32).to(self._device)
+                        c[torch.arange(n_show), labels[:n_show]] = 1#onehot
+                        c_real = fill[labels[:n_show]].to(self._device)
+                        gener = self._G(fixed_z, c).reshape(n_show, 28, 28).cpu().numpy()
+                        recon = self._G(self._E(real, c_real), c).reshape(n_show, 28, 28).cpu().numpy()#.reshape(n_show, 28, 28).cpu().numpy()
+                        real = real.reshape(n_show, 28, 28).cpu().numpy()
+
+                        fig, ax = plt.subplots(3, n_show, figsize=(15,5))
+                        fig.subplots_adjust(wspace=0.05, hspace=0)
+                        plt.rcParams.update({'font.size': 20})
+                        fig.suptitle('Epoch {}'.format(epoch+1))
+                        fig.text(0.04, 0.75, 'G(z, c)', ha='left')
+                        fig.text(0.04, 0.5, 'x', ha='left')
+                        fig.text(0.04, 0.25, 'G(E(x), c)', ha='left')
+
+                        for i in range(n_show):
+                            ax[0, i].imshow(gener[i], cmap='gray')
+                            ax[0, i].axis('off')
+                            ax[1, i].imshow(real[i], cmap='gray')
+                            ax[1, i].axis('off')
+                            ax[2, i].imshow(recon[i], cmap='gray')
+                            ax[2, i].axis('off')
+                        plt.savefig(f'{self._img_save_path}/E{epoch}_summary.png')
+                        #plt.show()
 
 
 
 
     def weights_init(self,m):
         classname = m.__class__.__name__
-        if classname.find('BatchNorm') != -1:
-            m.weight.data.normal_(1.0, 0.02)
-            m.bias.data.fill_(0)
+        if classname.find('Conv') != -1:
+            nn.init.normal_(m.weight.data, 0.0, 0.02)
+            if m.bias is not None:
+                nn.init.constant_(m.bias.data, 0)
         elif classname.find('Linear') != -1:
-            m.bias.data.fill_(0)
+            nn.init.normal_(m.weight.data, 0.0, 0.02)
+            if m.bias is not None:
+                nn.init.constant_(m.bias.data, 0)
+        elif classname.find('BatchNorm') != -1:
+            nn.init.normal_(m.weight.data, 1.0, 0.02)
+            nn.init.constant_(m.bias.data, 0)
+        # if classname.find('BatchNorm') != -1:
+        #     m.weight.data.normal_(1.0, 0.02)
+        #     m.bias.data.fill_(0)
+        # elif classname.find('Linear') != -1:
+        #     m.bias.data.fill_(0)
 
     def discriminator_weights_init(self,m):
         classname = m.__class__.__name__
