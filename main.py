@@ -4,7 +4,7 @@ import torch
 import torchvision
 import torchvision.transforms as transforms
 # from model import BiGAN
-from model import BiCoGAN
+from model import BiCoDCGAN
 from pprint import pprint
 
 def parse_args():
@@ -17,8 +17,12 @@ def parse_args():
                         metavar='N', help='early stopping (default: 50)')
     
     # Model
-    parser.add_argument('--gen_enc_lr', type=float, default=1e-4, help='learning rate for generator')
-    parser.add_argument('--discriminator_lr', type=float, default=1e-4, help='learning rate for discriminator')
+    parser.add_argument('--generator_lr', type=float, default=1e-4, help='learning rate for generator')
+    parser.add_argument('--discriminator_lr', type=float, default=4*1e-4, help='learning rate for discriminator')
+    parser.add_argument('--encoder_lr', type=float, default=1e-4, help='learning rate for generator')
+    parser.add_argument('--encoder_alpha', type=float, default=5, help='learning rate for generator')
+    parser.add_argument('--encoder_rho', type=float, default=0.25, help='learning rate for generator')
+    parser.add_argument('--encoder_phi', type=float, default=10, help='learning rate for generator')
     parser.add_argument('--latent_dim', type=int, default=100, help='Latent dimension of z')
     parser.add_argument('--weight_decay', type=float, default=2.5*1e-5, help='Weight decay')
     # Data
@@ -54,7 +58,7 @@ def main():
 
     # Model
     # model = BiGAN(config)
-    model = BiCoGAN(config)
+    model = BiCoDCGAN(config)
     
     model.train(train_loader)
 
