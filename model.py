@@ -197,7 +197,7 @@ class BiCoGAN(nn.Module):
                         ax[1, i].axis('off')
                         ax[2, i].imshow(recon[i], cmap='gray')
                         ax[2, i].axis('off')
-                    plt.savefig(f'{self._img_save_path}/E{epoch}_summary.png')
+                    plt.savefig(f'{self._img_save_path}/summary_E{epoch}.png')
                     #plt.show()
 
 
